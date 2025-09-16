@@ -191,6 +191,7 @@ static char *parse_partition_owner(char *line, struct bif_entry *bf)
 }
 
 static const struct bif_flags bif_flags[] = {
+	{ "init", BIF_FLAG_INIT },
 	{ "fsbl_config", BIF_FLAG_FSBL_CONFIG },
 	{ "trustzone", BIF_FLAG_TZ },
 	{ "pmufw_image", BIF_FLAG_PMUFW_IMAGE },
@@ -279,7 +280,7 @@ static int bif_add_blob(const void *data, size_t len, size_t *offset)
 	return 0;
 }
 
-static int bif_init(void)
+static int bif_initialize(void)
 {
 	struct zynqmp_header header = { { 0 } };
 	int r;
@@ -316,6 +317,15 @@ static int bif_add_pmufw(struct bif_entry *bf, const char *data, size_t len)
 	return 0;
 }
 
+static int bif_init(struct bif_entry *init)
+{
+	/* User can pass in text file with init list */
+	if (strlen(init->filename))
+		zynqmpimage_parse_initparams(bif_output.header, init->filename);
+
+	return 0;
+}
+
 static int bif_add_part(struct bif_entry *bf, const char *data, size_t len)
 {
 	size_t parthdr_offset = 0;
@@ -340,6 +350,8 @@ static int bif_add_part(struct bif_entry *bf, const char *data, size_t len)
 
 	if (bf->flags & (1ULL << BIF_FLAG_PMUFW_IMAGE))
 		return bif_add_pmufw(bf, data, len);
+	else if (bf->flags & (1ULL << BIF_FLAG_INIT))
+		return bif_init(bf);
 
 	r = bif_add_blob(data, len, &bf->offset);
 	if (r)
@@ -837,7 +849,7 @@ int zynqmpbif_copy_image(int outfd, struct image_tool_params *mparams)
 	uint32_t csum;
 	int bldr = -1;
 
-	bif_init();
+	bif_initialize();
 
 	/* Read .bif input file */
 	bif = read_full_file(mparams->datafile, NULL);
